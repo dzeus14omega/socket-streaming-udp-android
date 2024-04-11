@@ -10,14 +10,8 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 
-import com.blankj.utilcode.util.PathUtils;
-import com.viettel.generaltestandroid.ftpserver.FTPServerController;
-
-
 public class MainActivity extends AppCompatActivity {
     private static final int PERMISSION_REQUEST_CODE = 100;
-
-    FTPServerController ftpServer = new FTPServerController();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,7 +25,6 @@ public class MainActivity extends AppCompatActivity {
             requestPermission();
         } else {
             // Permission already granted, proceed with your FTP server setup or other functionality
-            startFTPServer();
         }
     }
 
@@ -56,31 +49,14 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 // Permission granted, proceed with your FTP server setup or other functionality
-                startFTPServer();
             } else {
                 // Permission denied, handle accordingly (e.g., show a message to the user)
             }
         }
     }
 
-    private void startFTPServer() {
-        String homePath = this.getCacheDir().getPath();
-        //String homePath = PathUtils.getExternalStoragePath();
-        ftpServer.startFtpServer("admin","12345678@VHT", homePath,9001);
-    }
-
-    private void stopFTPServer() {
-        if (ftpServer != null) {
-            ftpServer.stopFtpServer();
-        }
-    }
-
-
-
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        stopFTPServer();
     }
 }
