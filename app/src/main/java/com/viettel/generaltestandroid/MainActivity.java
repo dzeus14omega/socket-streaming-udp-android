@@ -17,14 +17,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        //String homePath = this.getCacheDir().getPath();
 
         // Check if permission is not granted
         if (!checkPermission()) {
             // Request permission
             requestPermission();
         } else {
-            // Permission already granted, proceed with your FTP server setup or other functionality
         }
     }
 
@@ -48,9 +46,7 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Permission granted, proceed with your FTP server setup or other functionality
             } else {
-                // Permission denied, handle accordingly (e.g., show a message to the user)
             }
         }
     }
