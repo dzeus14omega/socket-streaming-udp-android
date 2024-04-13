@@ -18,6 +18,7 @@ import android.hardware.Camera.Size;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Pair;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -28,13 +29,16 @@ import android.view.Window;
 import android.widget.Button;
 import android.widget.EditText;
 
+import com.viettel.generaltestandroid.testRTPv1.RTPPacket;
+import com.viettel.generaltestandroid.testRTPv2.RTPPacketBuilder;
+
 import java.io.IOException;
-import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback, Camera.PreviewCallback {
@@ -48,6 +52,7 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     private final static int DEFAULT_FRAME_RATE = 15;
     private final static int DEFAULT_BIT_RATE = 500000;
+    private static int seqNum =0;
 
     Camera camera;
     SurfaceHolder previewHolder;
@@ -57,7 +62,7 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     DatagramSocket udpSocket;
     InetAddress address;
     int port;
-    ArrayList<byte[]> encDataList = new ArrayList<byte[]>();
+    ArrayList<Pair<Long,byte[]>> encDataList = new ArrayList<>();
     ArrayList<Integer> encDataLengthList = new ArrayList<Integer>();
 
     Runnable senderRun = new Runnable() {
@@ -65,15 +70,24 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
         public void run() {
             while (isStreaming) {
                 boolean empty = false;
-                byte[] encData = null;
+                Pair<Long, byte[]> encData = null;
+                byte[] rtpData = null;
 
                 synchronized(encDataList) {
                     if (encDataList.size() == 0)
                     {
                         empty = true;
                     }
-                    else
+                    else {
                         encData = encDataList.remove(0);
+                        if (isSPS(encData.second) || isPPS(encData.second)) {
+                            Log.d("DebugStreamP2P","encode frame is SPS/PPS frame -> send RTP packet" );
+                            sendRtpPacket(encData.second, encData.first);
+                        } else {
+                            Log.d("DebugStreamP2P","encode iframe -> trigger packetizeAndSend" );
+                            packetizeAndSend(encData.second, encData.first);
+                        }
+                    }
                 }
                 if (empty) {
                     try {
@@ -83,19 +97,71 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
                     }
                     continue;
                 }
-                try {
-                    Log.d("DebugStreamP2P", "Send UDP packet: data size:" + encData.length);
-                    DatagramPacket packet = new DatagramPacket(encData, encData.length, address, port);
+
+                /*try {
+                    Log.d("DebugStreamP2P", "Send UDP packet: data size:" + encData.second.length + " - timePresent: " + encData.first);
+                    DatagramPacket packet = new DatagramPacket(encData.second, encData.second.length, address, port);
                     udpSocket.send(packet);
                 }
                 catch (IOException e) {
                     e.printStackTrace();
-                }
+                }*/
             }
             //TODO:
         }
     };
 
+    private boolean isSPS(byte[] data) {
+        return data.length > 0 && data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 1 && (data[4] & 0x1F) == 7;
+    }
+
+    // Method to check if data represents PPS (Picture Parameter Set)
+    private boolean isPPS(byte[] data) {
+        return data.length > 0 && data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 1 && (data[4] & 0x1F) == 8;
+    }
+
+    private void packetizeAndSend(byte[] data, long timestamp) {
+        int offset = 0;
+        while (offset < data.length) {
+            Log.d("DebugStreamP2P","on packetize for offset: " + offset );
+
+            // Find start of next NAL unit
+            int start = offset;
+            while (start < data.length - 4 && !(data[start] == 0 && data[start + 1] == 0 && data[start + 2] == 0 && data[start + 3] == 1)) {
+                start++;
+            }
+
+            // Determine end of NAL unit
+            int end = start + 4;
+            while (end < data.length - 4 && !(data[end] == 0 && data[end + 1] == 0 && data[end + 2] == 0 && data[end + 3] == 1)) {
+                end++;
+            }
+
+            // Packetize NAL unit into RTP packet
+            byte[] nalUnit = Arrays.copyOfRange(data, start, end);
+            Log.d("DebugStreamP2P","encode iframe -> send RTP packet - offset: " + offset  + "/" + data.length);
+            sendRtpPacket(nalUnit, timestamp);
+
+            // Move to next NAL unit
+            offset = end;
+        }
+    }
+
+    private void sendRtpPacket(byte[] payload, long timestamp) {
+        try {
+            // Create RTP packet
+            //RTPPacket rtpPacket = new RTPPacket(payload, ++seqNum, timestamp,"test_device");
+            //DatagramPacket packet = new DatagramPacket(encData.second, encData.second.length, address, port);
+
+            RTPPacketBuilder rtpPacketBuilder = new RTPPacketBuilder(udpSocket, address, port);
+            rtpPacketBuilder.sendH264RtpPacket(payload, timestamp, ++seqNum);
+            // Send RTP packet
+            // rtpManager.sendData(rtpPacket.getPacket(), payload.length);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.d("DebugStreamP2P", "Error on send rtp package: " + e);
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -218,8 +284,8 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
                 return;
             }
 
-            byte[] encData = this.encoder.offerEncoder(data);
-            if (encData.length > 0)
+            Pair<Long,byte[]> encData = this.encoder.offerEncoder(data);
+            if (encData.second.length > 0)
             {
                 synchronized(this.encDataList)
                 {

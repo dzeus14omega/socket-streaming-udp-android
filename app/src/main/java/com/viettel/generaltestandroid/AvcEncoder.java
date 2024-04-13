@@ -4,6 +4,7 @@ import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
+import android.util.Pair;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -100,8 +101,8 @@ public class AvcEncoder {
         }
     }
 
-    public byte[] offerEncoder(byte[] input)
-    {
+    public Pair<Long, byte[]> offerEncoder(byte[] input) {
+        long timestamp = 0;
         YV12toYUV420PackedSemiPlanar(input, yuv420, width, height);
         try {
             ByteBuffer[] inputBuffers = mediaCodec.getInputBuffers();
@@ -122,6 +123,7 @@ public class AvcEncoder {
 
             while (outputBufferIndex >= 0)
             {
+                timestamp = bufferInfo.presentationTimeUs;
                 ByteBuffer outputBuffer = outputBuffers[outputBufferIndex];
                 byte[] outData = new byte[bufferInfo.size];
                 outputBuffer.get(outData);
@@ -162,7 +164,7 @@ public class AvcEncoder {
         }
         byte[] ret = outputStream.toByteArray();
         outputStream.reset();
-        return ret;
+        return new Pair<>(timestamp, ret);
     }
 
     public byte[] YV12toYUV420PackedSemiPlanar(final byte[] input, final byte[] output, final int width, final int height)
