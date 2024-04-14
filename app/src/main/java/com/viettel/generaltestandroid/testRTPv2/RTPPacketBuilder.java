@@ -14,8 +14,6 @@ public class RTPPacketBuilder {
     private DatagramSocket socket;
     private InetAddress destinationAddress;
     private int destinationPort;
-    private int sequenceNumber;
-    private long timestamp;
 
     public RTPPacketBuilder(DatagramSocket socket, InetAddress address, int port) throws SocketException, UnknownHostException {
         this.socket = socket;
@@ -27,7 +25,7 @@ public class RTPPacketBuilder {
         int payloadType = 96; // H.264 payload type (can be changed based on RTP profile)
 
         // RTP header
-        byte[] rtpHeader = createRtpHeader(payloadType);
+        byte[] rtpHeader = createRtpHeader(payloadType, seqNum, timestamp);
         Log.d("DebugStreamP2P", "debug rtp header: " + byteArrayToHexString(rtpHeader));
 
         // Concatenate RTP header and H.264 frame
@@ -36,13 +34,8 @@ public class RTPPacketBuilder {
         System.arraycopy(h264Frame, 0, rtpPacket, rtpHeader.length, h264Frame.length);
 
         // Send RTP packet
-        Log.d("DebugStreamP2P", "start send package seqNum = " + seqNum + " data size = " + rtpPacket.length);
         DatagramPacket packet = new DatagramPacket(rtpPacket, rtpPacket.length, destinationAddress, destinationPort);
         socket.send(packet);
-
-        // Update sequence number and timestamp
-        sequenceNumber = seqNum;
-        this.timestamp = timestamp; // Assuming 30 FPS, adjust as per your frame rate
     }
 
     public static String byteArrayToHexString(byte[] bytes) {
@@ -55,7 +48,16 @@ public class RTPPacketBuilder {
         return sb.toString().trim();
     }
 
-    private byte[] createRtpHeader(int payloadType) {
+//    0               1               2               3
+//    0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |V=2|P|X|  CC   |M|     PT      |       Sequence Number         |
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |                           Timestamp                           |
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |           Synchronization Source (SSRC) identifier            |
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    private byte[] createRtpHeader(int payloadType, int sequenceNumber, long timestamp) {
         byte[] header = new byte[12];
 
         // RTP version (2), padding (0), extension (0), CC (0)
@@ -79,7 +81,12 @@ public class RTPPacketBuilder {
         header[9] = 0;
         header[10] = 0;
         header[11] = 0;
-
+        Log.d("DebugStreamP2P", "show header detail: \n" +
+                "version: 2 - " + String.format("%02X ", header[0] & 0xFF) + "\n" +
+                "payloadType: " + payloadType + " - " + String.format("%02X ", header[1] & 0xFF) + "\n" +
+                "sequenceNumber: " + sequenceNumber + " - " + String.format("%02X ", header[2] & 0xFF) + " " + String.format("%02X ", header[3] & 0xFF) + "\n" +
+                "timestamp: " + timestamp + " - " + String.format("%02X ", header[4] & 0xFF) + " " +  String.format("%02X ", header[5] & 0xFF) + " " + String.format("%02X ", header[6] & 0xFF) + " " + String.format("%02X ", header[7] & 0xFF) + "\n" +
+                "SSRC: " + "\n" );
         return header;
     }
 

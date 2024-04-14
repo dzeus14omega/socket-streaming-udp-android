@@ -139,7 +139,7 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
             // Packetize NAL unit into RTP packet
             byte[] nalUnit = Arrays.copyOfRange(data, start, end);
-            Log.d("DebugStreamP2P","encode iframe -> send RTP packet - offset: " + offset  + "/" + data.length);
+            Log.d("DebugStreamP2P","encode iframe -> send RTP packet nalUnit - offset: " + offset  + "/" + data.length);
             sendRtpPacket(nalUnit, timestamp);
 
             // Move to next NAL unit
